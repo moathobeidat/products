@@ -34,15 +34,18 @@ const error = ref(null)
 const page = ref(1)
 const hasMore = ref(true)
 const intersectionTarget = ref(null)
+const observer = ref(null)
 
-const fetchProducts = async () => {
+const fetchProducts = async (resetProducts = false) => {
   if (!hasMore.value || loading.value) return
 
   loading.value = true
   error.value = null
 
+  const currentPage = resetProducts ? page.value : page.value + 1
+
   try {
-    const response = await fetch(`https://stg.action.jo/api/v1/products?slug=accessories&page=${page.value}`)
+    const response = await fetch(`https://stg.action.jo/api/v1/products?slug=accessories&page=${currentPage}`)
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
@@ -54,11 +57,18 @@ const fetchProducts = async () => {
         !products.value.some(existingProduct => existingProduct.productId === newProduct.productId)
       )
       
-      products.value = [...products.value, ...newProducts]
-      hasMore.value = data.pagination && data.pagination.page < data.pagination.lastPage
-      page.value++
+      if (resetProducts) {
+        products.value = newProducts
+      } else {
+        products.value = [...products.value, ...newProducts]
+        page.value = currentPage
+      }
       
-      updateQueryParam()
+      hasMore.value = data.pagination && data.pagination.page < data.pagination.lastPage
+      
+      if (!resetProducts) {
+        updateQueryParam()
+      }
     } else {
       console.error('Invalid data structure:', data)
       throw new Error('Invalid data structure received from API')
@@ -72,8 +82,8 @@ const fetchProducts = async () => {
 }
 
 const handleIntersection = (entries) => {
-  if (entries[0].isIntersecting) {
-    fetchProducts()
+  if (entries[0].isIntersecting && !loading.value && hasMore.value) {
+    fetchProducts(false)
   }
 }
 
@@ -81,39 +91,43 @@ const updateQueryParam = () => {
   router.push({ query: { ...route.query, page: page.value } }, { replace: true })
 }
 
-const handleScroll = () => {
-  const scrollPosition = window.pageYOffset || document.documentElement.scrollTop
-  const windowHeight = window.innerHeight
-  const documentHeight = document.documentElement.scrollHeight
-
-  if (scrollPosition + windowHeight < documentHeight - 200) {
-    const newPage = Math.ceil(scrollPosition / (windowHeight * 0.5))
-    if (newPage < page.value) {
-      page.value = newPage
-      updateQueryParam()
-    }
+const setupObserver = () => {
+  if (observer.value) {
+    observer.value.disconnect()
+  }
+  
+  observer.value = new IntersectionObserver(handleIntersection, {
+    root: null,
+    rootMargin: '100px',
+    threshold: 0.1
+  })
+  
+  if (intersectionTarget.value) {
+    observer.value.observe(intersectionTarget.value)
   }
 }
 
 onMounted(() => {
-  const observer = new IntersectionObserver(handleIntersection)
-  observer.observe(intersectionTarget.value)
-
   const urlPage = Number(route.query.page) || 1
-  page.value = urlPage
-  fetchProducts()
-
-  window.addEventListener('scroll', handleScroll)
+  page.value = Math.max(1, urlPage)
+  setupObserver()
+  fetchProducts(true)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
+  if (observer.value) {
+    observer.value.disconnect()
+  }
 })
 
 watch(() => route.query.page, (newPage) => {
   if (newPage && Number(newPage) !== page.value) {
-    page.value = Number(newPage)
-    fetchProducts()
+    const pageNum = Math.max(1, Number(newPage))
+    if (pageNum !== page.value) {
+      page.value = pageNum
+      fetchProducts(true)
+    }
   }
 })
 </script>
+
