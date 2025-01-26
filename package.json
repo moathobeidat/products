@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@nuxthub/core": "^0.8.12",
+    "lucide-vue-next": "^0.474.0",
     "nuxt": "^3.15.2",
     "vue": "latest",
     "vue-lazyload": "^3.0.0",

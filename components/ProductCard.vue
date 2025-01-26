@@ -61,3 +61,4 @@ const formatPrice = (price) => {
   return `${price} JOD`
 }
 </script>
+
